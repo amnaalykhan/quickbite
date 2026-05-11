@@ -1,0 +1,42 @@
+{
+  "name": "quickbite",
+  "version": "1.0.0",
+  "description": "QuickBite - Smart Restaurant Ordering System",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build-mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.quickbite.app",
+    "productName": "QuickBite",
+    "directories": { "output": "dist" },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico"
+    },
+    "mac": { "target": "dmg", "icon": "assets/icon.icns" },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "QuickBite"
+    },
+    "extraResources": [
+      { "from": "../customer-menu", "to": "customer-menu" }
+    ],
+    "files": ["**/*", "!dist/**", "!*.md"]
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.2",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.4"
+  },
+  "devDependencies": {
+    "electron": "^29.1.0",
+    "electron-builder": "^24.13.3"
+  }
+}
