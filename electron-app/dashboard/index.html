@@ -390,8 +390,9 @@ select.form-input{cursor:pointer;}
 <script>
 const { ipcRenderer } = require('electron');
 
-// Cloud server URL overrides local; stored in localStorage so it persists
-let API = localStorage.getItem('quickbite_server_url') || 'http://localhost:3000';
+// Cloud server URL — change this if you redeploy to a new URL
+const DEFAULT_SERVER = 'https://quickbite-2-m1sd.onrender.com';
+let API = localStorage.getItem('quickbite_server_url') || DEFAULT_SERVER;
 // Strip trailing slash
 API = API.replace(/\/$/, '');
 
