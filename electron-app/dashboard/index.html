@@ -751,7 +751,7 @@ async function openQR() {
   const grid = document.getElementById('qrGrid');
   grid.innerHTML = '';
   for (let t = 1; t <= tableCount; t++) {
-    const url = `${API}/?table=${t}`;
+    const url = `https://amnaalykhan.github.io/quickbite/customer-menu/?table=${t}`;
     const div = document.createElement('div');
     div.className = 'qr-card';
     const tableLabel = document.createElement('div');
