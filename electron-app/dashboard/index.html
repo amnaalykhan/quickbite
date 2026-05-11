@@ -118,14 +118,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
 .modal-close:hover{color:var(--text);}
 
 /* QR GRID */
-.qr-modal{width:580px;}
-.qr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.qr-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;transition:all .15s;cursor:pointer;}
+.qr-modal{width:640px;max-height:85vh;overflow-y:auto;}
+.qr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.qr-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;transition:all .15s;}
 .qr-card:hover{border-color:var(--orange);}
-.qr-card img{width:100%;border-radius:6px;display:block;}
+.qr-card canvas{width:100%!important;height:auto!important;border-radius:6px;display:block;}
 .qr-card-label{font-size:12px;font-weight:700;color:var(--text2);margin-top:6px;}
 .qr-url{font-size:9px;color:var(--text4);word-break:break-all;margin-top:2px;font-family:var(--mono);}
 .qr-note{font-size:12px;color:var(--text3);margin-bottom:14px;}
+.qr-dl-btn{margin-top:8px;width:100%;padding:5px 0;font-size:11px;font-weight:700;background:var(--orange-dim);color:var(--orange);border:1px solid var(--orange-glow);border-radius:6px;cursor:pointer;transition:background .15s;}
+.qr-dl-btn:hover{background:var(--orange);color:#fff;}
+.qr-actions{display:flex;gap:10px;margin-bottom:14px;}
+.qr-actions button{flex:1;padding:8px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid var(--border2);background:var(--surface3);color:var(--text2);transition:all .15s;}
+.qr-actions button:hover{background:var(--orange);color:#fff;border-color:var(--orange);}
 
 /* FORMS */
 .form-group{margin-bottom:14px;}
@@ -313,7 +318,11 @@ select.form-input{cursor:pointer;}
   <div class="modal qr-modal">
     <button class="modal-close" onclick="closeOverlay('qrOverlay')">×</button>
     <div class="modal-title">📱 Table QR Codes</div>
-    <div class="qr-note">Print and laminate — place one on each table. Customers scan to order.</div>
+    <div class="qr-note">Each QR opens the menu for that table. Print and laminate — place one per table.</div>
+    <div class="qr-actions">
+      <button onclick="downloadAllQR()">⬇ Download All (ZIP)</button>
+      <button onclick="printAllQR()">🖨 Print All</button>
+    </div>
     <div class="qr-grid" id="qrGrid"></div>
   </div>
 </div>
@@ -692,6 +701,8 @@ async function saveSettings() {
 }
 
 // ── QR ─────────────────────────────────────────────────────────────────────
+const QRCode = require('qrcode');
+
 async function openQR() {
   try {
     const info = await ipcRenderer.invoke('get-server-info');
@@ -703,13 +714,81 @@ async function openQR() {
     const url = `http://${serverIP}:3000/?table=${t}`;
     const div = document.createElement('div');
     div.className = 'qr-card';
-    div.innerHTML = `<div style="font-size:11px;font-weight:800;color:var(--orange);margin-bottom:6px">TABLE ${t}</div>
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}&color=1A1A2E&bgcolor=ffffff" alt="QR Table ${t}" loading="lazy"/>
-      <div class="qr-card-label">Scan to Order</div>
-      <div class="qr-url">${url}</div>`;
+    const tableLabel = document.createElement('div');
+    tableLabel.style.cssText = 'font-size:11px;font-weight:800;color:var(--orange);margin-bottom:6px';
+    tableLabel.textContent = `TABLE ${t}`;
+    const canvas = document.createElement('canvas');
+    const label = document.createElement('div');
+    label.className = 'qr-card-label';
+    label.textContent = 'Scan to Order';
+    const urlEl = document.createElement('div');
+    urlEl.className = 'qr-url';
+    urlEl.textContent = url;
+    const dlBtn = document.createElement('button');
+    dlBtn.className = 'qr-dl-btn';
+    dlBtn.textContent = '⬇ Download PNG';
+    dlBtn.onclick = () => downloadQR(canvas, t);
+    div.append(tableLabel, canvas, label, urlEl, dlBtn);
     grid.appendChild(div);
+    await QRCode.toCanvas(canvas, url, {
+      width: 180, margin: 1,
+      color: { dark: '#0a0f1e', light: '#ffffff' }
+    });
   }
   document.getElementById('qrOverlay').classList.add('open');
+}
+
+function downloadQR(canvas, tableNum) {
+  const link = document.createElement('a');
+  link.download = `QuickBite-Table-${tableNum}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+async function downloadAllQR() {
+  const cards = document.querySelectorAll('#qrGrid .qr-card canvas');
+  for (let i = 0; i < cards.length; i++) {
+    const link = document.createElement('a');
+    link.download = `QuickBite-Table-${i + 1}.png`;
+    link.href = cards[i].toDataURL('image/png');
+    link.click();
+    await new Promise(r => setTimeout(r, 300));
+  }
+  showFlash(`Downloaded ${cards.length} QR codes`);
+}
+
+function printAllQR() {
+  const cards = document.querySelectorAll('#qrGrid .qr-card');
+  const rows = [];
+  cards.forEach((card, i) => {
+    const canvas = card.querySelector('canvas');
+    const url = card.querySelector('.qr-url').textContent;
+    rows.push(`
+      <div class="qr-print-card">
+        <div class="table-label">TABLE ${i + 1}</div>
+        <img src="${canvas.toDataURL('image/png')}"/>
+        <div class="scan-label">Scan to Order</div>
+        <div class="url-label">${url}</div>
+      </div>`);
+  });
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>QuickBite QR Codes</title>
+  <style>
+    body{font-family:sans-serif;margin:0;padding:20px;background:#fff;}
+    h2{text-align:center;margin-bottom:20px;color:#ff6b35;font-size:18px;}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+    .qr-print-card{border:2px solid #ddd;border-radius:10px;padding:12px;text-align:center;page-break-inside:avoid;}
+    .table-label{font-size:14px;font-weight:800;color:#ff6b35;margin-bottom:6px;}
+    img{width:100%;max-width:160px;display:block;margin:0 auto;}
+    .scan-label{font-size:11px;font-weight:700;color:#333;margin-top:6px;}
+    .url-label{font-size:8px;color:#999;word-break:break-all;margin-top:3px;}
+    @media print{body{padding:10px;}h2{margin-bottom:12px;}}
+  </style></head><body>
+  <h2>QuickBite — Table QR Codes</h2>
+  <div class="grid">${rows.join('')}</div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  win.document.close();
 }
 
 // ── UTILS ──────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
   "name": "quickbite",
   "version": "1.0.0",
   "description": "QuickBite - Smart Restaurant Ordering System",
+  "author": "QuickBite",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
