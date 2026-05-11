@@ -297,9 +297,19 @@ select.form-input{cursor:pointer;}
   <div class="settings-wrap">
     <div class="page-hdr"><div class="page-hdr-title">⚙️ Settings</div></div>
     <div class="server-card">
-      <div class="server-card-title">📡 Server Info — Customers use this URL</div>
+      <div class="server-card-title">🌐 Customer Order URL</div>
       <div class="server-url-big" id="serverUrl">Loading…</div>
-      <div class="server-note">⚠️ All phones must be on the SAME WiFi network as this PC</div>
+      <div class="server-note" id="serverNote">Loading…</div>
+    </div>
+    <div class="section-title">☁️ Cloud Server (recommended)</div>
+    <div class="form-group">
+      <label class="form-label">Server URL <span style="color:var(--text3);font-weight:400;text-transform:none">(paste your Railway / cloud URL here)</span></label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="s-server-url" placeholder="https://quickbite-xxx.railway.app"/>
+        <button class="btn-primary" style="white-space:nowrap" onclick="saveServerUrl()">Apply</button>
+        <button class="btn-secondary" style="white-space:nowrap" onclick="resetServerUrl()">Use Local</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:5px">Leave blank and click "Use Local" to go back to same-WiFi mode.</div>
     </div>
     <div class="section-title">Restaurant Info</div>
     <div class="form-group"><label class="form-label">Restaurant Name</label><input class="form-input" id="s-name" placeholder="My Restaurant"/></div>
@@ -379,12 +389,16 @@ select.form-input{cursor:pointer;}
 
 <script>
 const { ipcRenderer } = require('electron');
-const API = 'http://localhost:3000';
+
+// Cloud server URL overrides local; stored in localStorage so it persists
+let API = localStorage.getItem('quickbite_server_url') || 'http://localhost:3000';
+// Strip trailing slash
+API = API.replace(/\/$/, '');
+
 const socket = io(API, { transports: ['websocket','polling'] });
 
 let orders = [];
 let categories = [];
-let serverIP = 'localhost';
 let tableCount = 10;
 let currency = '₹';
 
@@ -666,11 +680,25 @@ async function loadHistory() {
 
 // ── SETTINGS ───────────────────────────────────────────────────────────────
 async function loadSettings() {
-  try {
-    const info = await ipcRenderer.invoke('get-server-info');
-    serverIP = info.ip;
-    document.getElementById('serverUrl').textContent = `http://${serverIP}:3000`;
-  } catch(e) {}
+  // Show current server URL and mode
+  const savedUrl = localStorage.getItem('quickbite_server_url');
+  const isCloud = savedUrl && !savedUrl.includes('localhost') && !savedUrl.includes('127.0.0.1');
+  document.getElementById('s-server-url').value = savedUrl || '';
+  if (isCloud) {
+    document.getElementById('serverUrl').textContent = savedUrl;
+    document.getElementById('serverNote').textContent = '✅ Cloud mode — customers can order from any network';
+    document.getElementById('serverNote').style.color = 'var(--green)';
+  } else {
+    try {
+      const info = await ipcRenderer.invoke('get-server-info');
+      document.getElementById('serverUrl').textContent = `http://${info.ip}:3000`;
+    } catch(e) {
+      document.getElementById('serverUrl').textContent = 'http://localhost:3000';
+    }
+    document.getElementById('serverNote').textContent = '⚠️ Local mode — customers must be on the same WiFi';
+    document.getElementById('serverNote').style.color = 'var(--yellow)';
+  }
+
   const res = await fetch(`${API}/api/settings`);
   const s = await res.json();
   document.getElementById('s-name').value = s.name || '';
@@ -680,6 +708,21 @@ async function loadSettings() {
   document.getElementById('s-wifi').value = s.wifi_password || '';
   tableCount = s.table_count || 10;
   currency = s.currency || '₹';
+}
+
+function saveServerUrl() {
+  const url = document.getElementById('s-server-url').value.trim().replace(/\/$/, '');
+  if (!url) { resetServerUrl(); return; }
+  localStorage.setItem('quickbite_server_url', url);
+  showFlash('✅ Server URL saved — restarting connection…');
+  setTimeout(() => location.reload(), 1200);
+}
+
+function resetServerUrl() {
+  localStorage.removeItem('quickbite_server_url');
+  document.getElementById('s-server-url').value = '';
+  showFlash('↩️ Switched to local mode — restarting…');
+  setTimeout(() => location.reload(), 1200);
 }
 
 async function saveSettings() {
@@ -704,14 +747,10 @@ async function saveSettings() {
 const QRCode = require('qrcode');
 
 async function openQR() {
-  try {
-    const info = await ipcRenderer.invoke('get-server-info');
-    serverIP = info.ip;
-  } catch(e) {}
   const grid = document.getElementById('qrGrid');
   grid.innerHTML = '';
   for (let t = 1; t <= tableCount; t++) {
-    const url = `http://${serverIP}:3000/?table=${t}`;
+    const url = `${API}/?table=${t}`;
     const div = document.createElement('div');
     div.className = 'qr-card';
     const tableLabel = document.createElement('div');
