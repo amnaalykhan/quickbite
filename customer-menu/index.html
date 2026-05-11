@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <title>QuickBite — Order Food</title>
-<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&display=swap');
 :root{
@@ -21,6 +21,21 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow-x:hidden;}
 body{font-family:var(--font);background:var(--bg);color:var(--text);padding-bottom:90px;}
+
+/* WAKING UP SCREEN */
+.waking{position:fixed;inset:0;background:#fff;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center;}
+.waking-logo{font-size:64px;animation:bob 1.8s ease-in-out infinite;}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.waking-title{font-size:22px;font-weight:900;color:#111827;}
+.waking-msg{font-size:14px;color:#6b7280;line-height:1.5;max-width:260px;}
+.waking-bar{width:200px;height:4px;background:#f3f4f6;border-radius:99px;overflow:hidden;margin-top:4px;}
+.waking-fill{height:100%;background:var(--orange);border-radius:99px;animation:fill 2.5s ease-in-out infinite;}
+@keyframes fill{0%{width:0%}70%{width:90%}100%{width:90%}}
+.waking-dots{font-size:13px;color:#9ca3af;}
+.waking-dots span{animation:blink 1.4s infinite}
+.waking-dots span:nth-child(2){animation-delay:.2s}
+.waking-dots span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
 
 /* SPLASH / TABLE SELECT */
 .splash{position:fixed;inset:0;background:#fff;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:0;}
@@ -137,6 +152,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);padding-bott
 <!-- SPLASH / TABLE SELECT -->
 <div id="splash" class="splash">
   <div class="splash-top">
+<!-- WAKING UP OVERLAY -->
+<div class="waking" id="wakingScreen">
+  <div class="waking-logo">🍽</div>
+  <div class="waking-title">Waking up the kitchen<span class="waking-dots"><span>.</span><span>.</span><span>.</span></span></div>
+  <div class="waking-msg">Our server is starting up. This only takes about 30 seconds on the first visit of the day.</div>
+  <div class="waking-bar"><div class="waking-fill"></div></div>
+</div>
+
     <div class="splash-logo">🍽</div>
     <div class="splash-name" id="splashName">QuickBite</div>
     <div class="splash-tag" id="splashTag">Great Food, Great Vibes</div>
@@ -217,8 +240,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);padding-bott
 </div>
 
 <script>
-const API = '';
-const socket = io({ transports: ['websocket','polling'] });
+const API = 'https://quickbite-2-m1sd.onrender.com';
+const socket = io(API, { transports: ['websocket','polling'] });
 
 let tableNum = null;
 let selectedTableTemp = null;
@@ -240,27 +263,48 @@ async function init() {
 }
 
 async function loadMenu() {
-  try {
-    const res = await fetch(`${API}/api/menu`);
-    menu = await res.json();
-    const r = menu.restaurant || {};
-    currency = r.currency || '₹';
+  const waking = document.getElementById('wakingScreen');
+  const maxRetries = 20;
+  const retryDelay = 3000;
 
-    document.getElementById('splashName').textContent = r.name || 'QuickBite';
-    document.getElementById('splashTag').textContent = r.tagline || 'Great Food, Great Vibes';
-    document.getElementById('hdrName').textContent = r.name || 'QuickBite';
-    document.getElementById('hdrTag').textContent = r.tagline || 'Great Food, Great Vibes';
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${API}/api/menu`);
+      if (!res.ok) throw new Error('Server not ready');
+      menu = await res.json();
 
-    if (r.wifi_password) {
-      document.getElementById('wifiPass').textContent = r.wifi_password;
-      document.getElementById('wifiBanner').style.display = 'flex';
+      // Server is awake — hide waking screen
+      waking.style.display = 'none';
+
+      const r = menu.restaurant || {};
+      currency = r.currency || '₹';
+      document.getElementById('splashName').textContent = r.name || 'QuickBite';
+      document.getElementById('splashTag').textContent = r.tagline || 'Great Food, Great Vibes';
+      document.getElementById('hdrName').textContent = r.name || 'QuickBite';
+      document.getElementById('hdrTag').textContent = r.tagline || 'Great Food, Great Vibes';
+
+      if (r.wifi_password) {
+        document.getElementById('wifiPass').textContent = r.wifi_password;
+        document.getElementById('wifiBanner').style.display = 'flex';
+      }
+      buildCategoryTabs();
+      renderMenu();
+      return;
+    } catch(e) {
+      // Still waking up — update message with time remaining and retry
+      const secsLeft = Math.round(((maxRetries - attempt) * retryDelay) / 1000);
+      const msgEl = waking.querySelector('.waking-msg');
+      if (msgEl && attempt > 0) {
+        msgEl.textContent = `Almost there… please wait a moment. (${secsLeft}s)`;
+      }
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, retryDelay));
+      }
     }
-
-    buildCategoryTabs();
-    renderMenu();
-  } catch(e) {
-    document.getElementById('menuWrap').innerHTML = '<div class="load-wrap" style="color:red">⚠️ Failed to load menu. Make sure you are on the restaurant WiFi.</div>';
   }
+
+  // All retries exhausted
+  waking.innerHTML = '<div style="text-align:center;padding:32px"><div style="font-size:48px">😔</div><div style="font-size:18px;font-weight:800;margin:12px 0">Server unavailable</div><div style="color:#6b7280;font-size:14px">Please ask restaurant staff for assistance.</div></div>';
 }
 
 // ── TABLE ───────────────────────────────────────────────────────────────────
