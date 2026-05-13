@@ -202,9 +202,47 @@ select.form-input{cursor:pointer;}
 .server-url-big{font-family:var(--mono);font-size:18px;color:var(--orange);font-weight:700;margin-bottom:4px;}
 .server-note{font-size:11px;color:var(--text3);}
 .section-title{font-size:13px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;margin-top:20px;}
+
+/* LOGIN SCREEN */
+.login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px;width:400px;max-width:90vw;}
+.login-logo{font-size:40px;text-align:center;margin-bottom:8px;}
+.login-title{font-size:24px;font-weight:800;color:var(--text);text-align:center;margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--text3);text-align:center;margin-bottom:28px;}
+.login-tabs{display:flex;gap:0;margin-bottom:24px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.login-tab{flex:1;padding:10px;font-size:13px;font-weight:700;text-align:center;cursor:pointer;color:var(--text2);background:transparent;border:none;font-family:var(--font);transition:all .15s;}
+.login-tab.active{background:var(--orange);color:#fff;}
+.login-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px;display:none;}
+.login-footer{text-align:center;font-size:11px;color:var(--text3);margin-top:16px;}
 </style>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">🍽</div>
+    <div class="login-title">QuickBite</div>
+    <div class="login-sub">Restaurant Management Dashboard</div>
+    <div class="login-tabs">
+      <button class="login-tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+      <button class="login-tab" id="tabRegister" onclick="switchTab('register')">New Restaurant</button>
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <div id="formLogin">
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="l-email" type="email" placeholder="you@restaurant.com"/></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="l-pass" type="password" placeholder="••••••••"/></div>
+      <button class="btn-primary" style="width:100%;margin-top:4px" onclick="doLogin()">Sign In →</button>
+    </div>
+    <div id="formRegister" style="display:none">
+      <div class="form-group"><label class="form-label">Restaurant Name</label><input class="form-input" id="r-name" placeholder="e.g. Spice Garden"/></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="r-email" type="email" placeholder="you@restaurant.com"/></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="r-pass" type="password" placeholder="Min 6 characters"/></div>
+      <button class="btn-primary" style="width:100%;margin-top:4px" onclick="doRegister()">Create Account →</button>
+    </div>
+    <div class="login-footer">Your data is private and isolated to your restaurant</div>
+  </div>
+</div>
 
 <!-- TOPBAR -->
 <div class="topbar">
@@ -223,6 +261,7 @@ select.form-input{cursor:pointer;}
     <div class="clock" id="clock"></div>
     <button class="icon-btn" onclick="openQR()">📱 QR Codes</button>
     <button class="icon-btn" onclick="refreshOrders()">🔄 Refresh</button>
+    <button class="icon-btn" onclick="logout()" style="color:var(--red)">⏏ Logout</button>
   </div>
 </div>
 
@@ -392,9 +431,21 @@ const { ipcRenderer } = require('electron');
 
 // Cloud server URL — change this if you redeploy to a new URL
 const DEFAULT_SERVER = 'https://quickbite-2-m1sd.onrender.com';
-let API = localStorage.getItem('quickbite_server_url') || DEFAULT_SERVER;
-// Strip trailing slash
-API = API.replace(/\/$/, '');
+let API = (localStorage.getItem('quickbite_server_url') || DEFAULT_SERVER).replace(/\/$/, '');
+
+// ── TENANT AUTH ─────────────────────────────────────────────────────────────
+let TENANT_ID = localStorage.getItem('quickbite_tenant_id') || null;
+let RESTAURANT_NAME = localStorage.getItem('quickbite_restaurant_name') || 'My Restaurant';
+
+// Helper: all API calls automatically include ?rid=<tenant_id>
+async function apiFetch(path, options = {}) {
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `${API}${path}${sep}rid=${TENANT_ID}`;
+  if (options.body && typeof options.body === 'object') {
+    options.body = JSON.stringify({ ...JSON.parse(options.body), rid: TENANT_ID });
+  }
+  return fetch(url, options);
+}
 
 const socket = io(API, { transports: ['websocket','polling'] });
 
@@ -402,6 +453,80 @@ let orders = [];
 let categories = [];
 let tableCount = 10;
 let currency = '₹';
+
+// ── LOGIN ────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('formLogin').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('formRegister').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tabLogin').className = 'login-tab' + (tab === 'login' ? ' active' : '');
+  document.getElementById('tabRegister').className = 'login-tab' + (tab === 'register' ? ' active' : '');
+  document.getElementById('loginError').style.display = 'none';
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const password = document.getElementById('l-pass').value;
+  if (!email || !password) return showLoginError('Please enter email and password');
+  try {
+    const res = await apiFetch(`/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) return showLoginError(data.error || 'Login failed');
+    onAuthSuccess(data);
+  } catch(e) { showLoginError('Cannot connect to server. Check your internet connection.'); }
+}
+
+async function doRegister() {
+  const name = document.getElementById('r-name').value.trim();
+  const email = document.getElementById('r-email').value.trim();
+  const password = document.getElementById('r-pass').value;
+  if (!name || !email || !password) return showLoginError('All fields are required');
+  if (password.length < 6) return showLoginError('Password must be at least 6 characters');
+  try {
+    const res = await apiFetch(`/api/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, restaurant_name: name })
+    });
+    const data = await res.json();
+    if (!res.ok) return showLoginError(data.error || 'Registration failed');
+    onAuthSuccess(data);
+  } catch(e) { showLoginError('Cannot connect to server. Check your internet connection.'); }
+}
+
+function onAuthSuccess(data) {
+  TENANT_ID = data.tenant_id;
+  RESTAURANT_NAME = data.restaurant_name;
+  localStorage.setItem('quickbite_tenant_id', TENANT_ID);
+  localStorage.setItem('quickbite_restaurant_name', RESTAURANT_NAME);
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('restName').textContent = RESTAURANT_NAME;
+  socket.emit('join-restaurant', TENANT_ID);
+  loadOrders();
+  loadStats();
+}
+
+function logout() {
+  localStorage.removeItem('quickbite_tenant_id');
+  localStorage.removeItem('quickbite_restaurant_name');
+  location.reload();
+}
+
+// Show login screen or auto-init
+if (!TENANT_ID) {
+  document.getElementById('loginScreen').style.display = 'flex';
+} else {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('restName').textContent = RESTAURANT_NAME;
+  socket.emit('join-restaurant', TENANT_ID);
+}
 
 // ── CLOCK ──────────────────────────────────────────────────────────────────
 setInterval(() => {
@@ -441,7 +566,7 @@ socket.on('order-deleted', ({ id }) => {
 // ── ORDERS ─────────────────────────────────────────────────────────────────
 async function loadOrders() {
   try {
-    const res = await fetch(`${API}/api/orders`);
+    const res = await apiFetch(`/api/orders`);
     orders = await res.json();
     renderOrders();
   } catch(e) { console.error('Load orders failed:', e); }
@@ -511,7 +636,7 @@ function orderCard(o) {
 }
 
 async function setStatus(id, status) {
-  await fetch(`${API}/api/orders/${id}/status`, {
+  await apiFetch(`/api/orders/${id}/status`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status })
   });
@@ -519,12 +644,12 @@ async function setStatus(id, status) {
 
 async function deleteOrder(id) {
   if (!confirm('Remove this order?')) return;
-  await fetch(`${API}/api/orders/${id}`, { method: 'DELETE' });
+  await apiFetch(`/api/orders/${id}`, { method: 'DELETE' });
 }
 
 // ── MENU EDITOR ────────────────────────────────────────────────────────────
 async function loadMenuEditor() {
-  const res = await fetch(`${API}/api/menu/manage`);
+  const res = await apiFetch(`/api/menu/manage`);
   const { categories: cats, items } = await res.json();
   categories = cats;
 
@@ -564,7 +689,7 @@ async function loadMenuEditor() {
 }
 
 async function toggleAvail(id, btn) {
-  await fetch(`${API}/api/menu/items/${id}/toggle`, { method: 'PATCH' });
+  await apiFetch(`/api/menu/items/${id}/toggle`, { method: 'PATCH' });
   const isOn = btn.classList.contains('on');
   btn.className = `avail-btn ${isOn ? 'off' : 'on'}`;
   btn.textContent = isOn ? '✗ Off' : '✓ Available';
@@ -573,13 +698,13 @@ async function toggleAvail(id, btn) {
 
 async function deleteItem(id, name) {
   if (!confirm(`Delete "${name}"?`)) return;
-  await fetch(`${API}/api/menu/items/${id}`, { method: 'DELETE' });
+  await apiFetch(`/api/menu/items/${id}`, { method: 'DELETE' });
   loadMenuEditor();
 }
 
 async function deleteCat(id, name) {
   if (!confirm(`Delete category "${name}" and ALL its items?`)) return;
-  await fetch(`${API}/api/menu/categories/${id}`, { method: 'DELETE' });
+  await apiFetch(`/api/menu/categories/${id}`, { method: 'DELETE' });
   loadMenuEditor();
 }
 
@@ -598,7 +723,7 @@ async function openAddItem() {
 }
 
 async function openEditItem(id) {
-  const res = await fetch(`${API}/api/menu/manage`);
+  const res = await apiFetch(`/api/menu/manage`);
   const { items } = await res.json();
   const item = items.find(i => i.id === id);
   if (!item) return;
@@ -633,12 +758,12 @@ async function submitItem() {
   };
   if (!body.name || !body.price) return alert('Name and price are required');
   if (editId) {
-    await fetch(`${API}/api/menu/items/${editId}`, {
+    await apiFetch(`/api/menu/items/${editId}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
   } else {
-    await fetch(`${API}/api/menu/items`, {
+    await apiFetch(`/api/menu/items`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
@@ -652,7 +777,7 @@ async function submitCat() {
   const name = document.getElementById('ac-name').value.trim();
   const emoji = document.getElementById('ac-emoji').value.trim() || '🍽';
   if (!name) return alert('Name required');
-  await fetch(`${API}/api/menu/categories`, {
+  await apiFetch(`/api/menu/categories`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, emoji })
   });
@@ -662,7 +787,7 @@ async function submitCat() {
 
 // ── HISTORY ────────────────────────────────────────────────────────────────
 async function loadHistory() {
-  const res = await fetch(`${API}/api/orders/history`);
+  const res = await apiFetch(`/api/orders/history`);
   const hist = await res.json();
   const tbody = document.getElementById('histBody');
   if (!hist.length) {
@@ -700,7 +825,7 @@ async function loadSettings() {
     document.getElementById('serverNote').style.color = 'var(--yellow)';
   }
 
-  const res = await fetch(`${API}/api/settings`);
+  const res = await apiFetch(`/api/settings`);
   const s = await res.json();
   document.getElementById('s-name').value = s.name || '';
   document.getElementById('s-tagline').value = s.tagline || '';
@@ -734,7 +859,7 @@ async function saveSettings() {
     table_count: parseInt(document.getElementById('s-tables').value) || 10,
     wifi_password: document.getElementById('s-wifi').value
   };
-  await fetch(`${API}/api/settings`, {
+  await apiFetch(`/api/settings`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
@@ -751,7 +876,7 @@ async function openQR() {
   const grid = document.getElementById('qrGrid');
   grid.innerHTML = '';
   for (let t = 1; t <= tableCount; t++) {
-    const url = `https://amnaalykhan.github.io/quickbite/customer-menu/?table=${t}`;
+    const url = `https://amnaalykhan.github.io/quickbite/customer-menu/?table=${t}&rid=${TENANT_ID}`;
     const div = document.createElement('div');
     div.className = 'qr-card';
     const tableLabel = document.createElement('div');
@@ -863,7 +988,7 @@ async function init() {
   } catch(e) {}
   // Load settings first for currency
   try {
-    const res = await fetch(`${API}/api/settings`);
+    const res = await apiFetch(`/api/settings`);
     const s = await res.json();
     document.getElementById('restName').textContent = s.name || 'QuickBite';
     currency = s.currency || '₹';

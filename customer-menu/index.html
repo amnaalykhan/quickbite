@@ -241,7 +241,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);padding-bott
 
 <script>
 const API = 'https://quickbite-2-m1sd.onrender.com';
+const urlParams = new URLSearchParams(location.search);
+const RID = urlParams.get('rid') || '';
 const socket = io(API, { transports: ['websocket','polling'] });
+
+// Helper to add rid to all API calls
+function apiUrl(path) {
+  return `${API}${path}${path.includes('?') ? '&' : '?'}rid=${RID}`;
+}
 
 let tableNum = null;
 let selectedTableTemp = null;
@@ -269,7 +276,7 @@ async function loadMenu() {
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const res = await fetch(`${API}/api/menu`);
+      const res = await fetch(apiUrl('/api/menu'));
       if (!res.ok) throw new Error('Server not ready');
       menu = await res.json();
 
@@ -508,9 +515,9 @@ async function placeOrder() {
   };
 
   try {
-    const res = await fetch(`${API}/api/orders`, {
+    const res = await fetch(apiUrl('/api/orders'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, rid: RID })
     });
     const data = await res.json();
     if (data.success) {
