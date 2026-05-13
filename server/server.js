@@ -131,16 +131,24 @@ async function seedMenu(tenantId) {
 
 // ── MIDDLEWARE ───────────────────────────────────────────────────────────────
 function getTid(req) {
-  return req.query.rid || req.body?.rid || req.headers['x-restaurant-id'];
+  const tid = req.query.rid || req.body?.rid || req.headers['x-restaurant-id'];
+  // Reject JS falsy strings that arrive as literal text
+  if (!tid || tid === 'null' || tid === 'undefined' || tid === '') return null;
+  return tid;
 }
 
 async function requireTenant(req, res, next) {
-  const tid = getTid(req);
-  if (!tid) return res.status(401).json({ error: 'Missing restaurant ID' });
-  const { rows } = await query('SELECT id FROM tenants WHERE id=$1', [tid]);
-  if (!rows.length) return res.status(401).json({ error: 'Invalid restaurant ID' });
-  req.tid = tid;
-  next();
+  try {
+    const tid = getTid(req);
+    if (!tid) return res.status(401).json({ error: 'Missing restaurant ID' });
+    const { rows } = await query('SELECT id FROM tenants WHERE id=$1', [tid]);
+    if (!rows.length) return res.status(401).json({ error: 'Invalid restaurant ID' });
+    req.tid = tid;
+    next();
+  } catch (e) {
+    console.error('requireTenant error:', e.message);
+    res.status(500).json({ error: 'Server error validating restaurant' });
+  }
 }
 
 // ── APP SETUP ────────────────────────────────────────────────────────────────
