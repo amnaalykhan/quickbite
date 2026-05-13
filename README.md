@@ -12,6 +12,8 @@ Go to the [**Releases page**](https://github.com/amnaalykhan/quickbite/releases/
 |---|---|---|
 | **Windows** | `QuickBite-Windows-Setup.exe` | Double-click to install, creates desktop shortcut |
 | **macOS (M1/M2/M3)** | `QuickBite-macOS-arm64.dmg` | Drag to Applications. First launch: System Settings → Privacy & Security → Open Anyway |
+| **iPhone** | [Open in Safari →](https://amnaalykhan.github.io/quickbite/staff-app/) | Tap Share → "Add to Home Screen" to install as app |
+| **Android** | [Open in Chrome →](https://amnaalykhan.github.io/quickbite/staff-app/) | Tap ⋮ → "Add to Home Screen" to install as app |
 
 ---
 
@@ -48,6 +50,9 @@ quickbite/
 │   └── package.json
 ├── customer-menu/
 │   └── index.html       ← Customer mobile menu (hosted on GitHub Pages)
+├── staff-app/           ← Mobile PWA for iPhone/Android staff (hosted on GitHub Pages)
+│   ├── index.html       ← Staff dashboard UI
+│   └── manifest.json    ← PWA install manifest
 ├── server/              ← Cloud server (deployed to Render)
 │   ├── server.js        ← Express + Socket.io + PostgreSQL
 │   └── package.json
@@ -77,6 +82,7 @@ PATH="/opt/homebrew/opt/node@20/bin:$PATH" npm start
 | **Render** | Hosts the Express + Socket.io server | `https://quickbite-2-m1sd.onrender.com` |
 | **Supabase** | PostgreSQL database (menu, orders, settings) | Free tier |
 | **GitHub Pages** | Hosts the customer menu HTML | `https://amnaalykhan.github.io/quickbite/customer-menu/` |
+| **GitHub Pages** | Hosts the mobile staff PWA | `https://amnaalykhan.github.io/quickbite/staff-app/` |
 
 > **Note:** Render's free tier sleeps after 15 min of inactivity. The customer menu shows a friendly "waking up" screen (~30s) on first scan of the day, then stays fast for the rest of service.
 
@@ -143,4 +149,5 @@ Inside the app → **Settings**:
 | Cloud server | Express + Socket.io on Render (free) |
 | Database | PostgreSQL on Supabase (free) |
 | Customer menu | Plain HTML/CSS/JS on GitHub Pages (free) |
+| Mobile staff app | PWA (HTML/CSS/JS) on GitHub Pages (free) |
 | Installers | electron-builder |
