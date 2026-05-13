@@ -299,7 +299,7 @@ select.form-input{cursor:pointer;}
       <div class="stat"><div><div class="stat-val" id="s-preparing">0</div><div class="stat-label">In Kitchen</div></div></div>
       <div class="stat"><div><div class="stat-val" id="s-done">0</div><div class="stat-label">Completed</div></div></div>
       <div class="stat"><div><div class="stat-val" id="s-revenue">₹0</div><div class="stat-label">Today Revenue</div></div></div>
-      <div class="stat"><div><div class="stat-val" id="s-tables">—</div><div class="stat-label">Active Tables</div></div></div>
+      <div class="stat"><div><div class="stat-val" id="stat-tables">—</div><div class="stat-label">Active Tables</div></div></div>
     </div>
   </div>
 </div>
@@ -600,7 +600,7 @@ function renderOrders() {
   document.getElementById('s-revenue').textContent = currency + rev.toFixed(0);
 
   const activeTables = new Set([...buckets.new, ...buckets.preparing].map(o => o.table_number));
-  document.getElementById('s-tables').textContent = activeTables.size || 0;
+  document.getElementById('stat-tables').textContent = activeTables.size || 0;
 }
 
 function orderCard(o) {
