@@ -873,6 +873,9 @@ async function saveSettings() {
 const QRCode = require('qrcode');
 
 async function openQR() {
+  // Always read live value from the settings input if available
+  const inputVal = parseInt(document.getElementById('s-tables')?.value);
+  if (inputVal && inputVal > 0) tableCount = inputVal;
   const grid = document.getElementById('qrGrid');
   grid.innerHTML = '';
   for (let t = 1; t <= tableCount; t++) {
