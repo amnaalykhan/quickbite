@@ -302,7 +302,12 @@ expressApp.put('/api/settings', requireTenant, async (req, res) => {
 // ── MENU MANAGEMENT ──────────────────────────────────────────────────────────
 expressApp.get('/api/menu/manage', requireTenant, async (req, res) => {
   try {
-    const categories = (await query('SELECT * FROM categories WHERE tenant_id=$1 ORDER BY sort_order ASC', [req.tid])).rows;
+    let categories = (await query('SELECT * FROM categories WHERE tenant_id=$1 ORDER BY sort_order ASC', [req.tid])).rows;
+    // Auto-seed if restaurant has no menu yet (e.g. created during a server crash)
+    if (categories.length === 0) {
+      await seedMenu(req.tid);
+      categories = (await query('SELECT * FROM categories WHERE tenant_id=$1 ORDER BY sort_order ASC', [req.tid])).rows;
+    }
     const items = (await query('SELECT * FROM menu_items WHERE tenant_id=$1 ORDER BY category_id ASC, sort_order ASC', [req.tid])).rows;
     res.json({ categories, items });
   } catch(e) { res.status(500).json({ error: e.message }); }

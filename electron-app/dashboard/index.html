@@ -649,8 +649,17 @@ async function deleteOrder(id) {
 
 // ── MENU EDITOR ────────────────────────────────────────────────────────────
 async function loadMenuEditor() {
-  const res = await apiFetch(`/api/menu/manage`);
-  const { categories: cats, items } = await res.json();
+  document.getElementById('menuContent').innerHTML = 'Loading…';
+  try {
+    const res = await apiFetch(`/api/menu/manage`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      document.getElementById('menuContent').innerHTML = `<p style="color:var(--red)">Error loading menu: ${err.error || res.status}</p>`;
+      return;
+    }
+    const data = await res.json();
+    const cats = data.categories || [];
+    const items = data.items || [];
   categories = cats;
 
   const html = cats.map(cat => {
@@ -683,9 +692,12 @@ async function loadMenuEditor() {
           </div>
         </div>`).join('')}
     </div>`;
-  }).join('') || '<p style="color:var(--text3)">No categories yet. Add one!</p>';
+  }).join('') || '<p style="color:var(--text3)">No categories yet. Click "+ Category" to add one!</p>';
 
   document.getElementById('menuContent').innerHTML = html;
+  } catch(e) {
+    document.getElementById('menuContent').innerHTML = `<p style="color:var(--red)">Failed to load menu: ${e.message}</p>`;
+  }
 }
 
 async function toggleAvail(id, btn) {
